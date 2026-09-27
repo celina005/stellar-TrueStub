@@ -56,8 +56,33 @@ const GET_NOTIFICATION_PREFERENCES = /* GraphQL */ `
   }
 `;
 
+const UPDATE_NOTIFICATION_PREFERENCES = /* GraphQL */ `
+  mutation UpdateNotificationPreferences(
+    $offers: Boolean!
+    $escrowUpdates: Boolean!
+    $savedListingPriceDrops: Boolean!
+    $eventReminders: Boolean!
+  ) {
+    update_notification_preferences_by_pk(
+      pk_columns: { id: 1 }
+      _set: {
+        offers: $offers
+        escrowUpdates: $escrowUpdates
+        savedListingPriceDrops: $savedListingPriceDrops
+        eventReminders: $eventReminders
+      }
+    ) {
+      offers
+      escrowUpdates
+      savedListingPriceDrops
+      eventReminders
+    }
+  }
+`;
+
 export function NotificationPreferences() {
   const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,10 +130,30 @@ export function NotificationPreferences() {
     setPreferences((prev) => ({ ...prev, [key]: checked }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: replace with mutation(UPDATE_NOTIFICATION_PREFERENCES)
-    console.log("Save notification preferences", preferences);
+
+    setIsSaving(true);
+
+    try {
+      await fetch("/api/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: UPDATE_NOTIFICATION_PREFERENCES,
+          variables: {
+            offers: preferences.offers,
+            escrowUpdates: preferences.escrowUpdates,
+            savedListingPriceDrops: preferences.savedListingPriceDrops,
+            eventReminders: preferences.eventReminders,
+          },
+        }),
+      });
+    } catch {
+      // Keep the optimistic state if the save request fails.
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -136,9 +181,10 @@ export function NotificationPreferences() {
         <div className="flex justify-end">
           <Button
             type="submit"
+            disabled={isSaving}
             className="bg-orange-500 hover:bg-orange-600 text-white"
           >
-            Save preferences
+            {isSaving ? "Saving..." : "Save preferences"}
           </Button>
         </div>
       </div>
