@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type NotificationPreferenceKey =
   | "offers"
@@ -38,16 +38,68 @@ const PREFERENCE_OPTIONS: {
   },
 ];
 
-// TODO: replace with the user's stored preferences from Hasura
-const STUB_PREFERENCES: Record<NotificationPreferenceKey, boolean> = {
+const DEFAULT_PREFERENCES: Record<NotificationPreferenceKey, boolean> = {
   offers: true,
   escrowUpdates: true,
   savedListingPriceDrops: false,
   eventReminders: true,
 };
 
+const GET_NOTIFICATION_PREFERENCES = /* GraphQL */ `
+  query GetNotificationPreferences {
+    notification_preferences_by_pk {
+      offers
+      escrowUpdates
+      savedListingPriceDrops
+      eventReminders
+    }
+  }
+`;
+
 export function NotificationPreferences() {
-  const [preferences, setPreferences] = useState(STUB_PREFERENCES);
+  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreferences() {
+      try {
+        const response = await fetch("/api/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: GET_NOTIFICATION_PREFERENCES }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const { data } = await response.json();
+        const stored = data?.notification_preferences_by_pk;
+
+        if (!cancelled && stored) {
+          setPreferences({
+            offers: stored.offers ?? DEFAULT_PREFERENCES.offers,
+            escrowUpdates:
+              stored.escrowUpdates ?? DEFAULT_PREFERENCES.escrowUpdates,
+            savedListingPriceDrops:
+              stored.savedListingPriceDrops ??
+              DEFAULT_PREFERENCES.savedListingPriceDrops,
+            eventReminders:
+              stored.eventReminders ?? DEFAULT_PREFERENCES.eventReminders,
+          });
+        }
+      } catch {
+        // Keep defaults if the stored preferences can't be loaded.
+      }
+    }
+
+    loadPreferences();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleToggle = (key: NotificationPreferenceKey, checked: boolean) => {
     setPreferences((prev) => ({ ...prev, [key]: checked }));
